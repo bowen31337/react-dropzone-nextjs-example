@@ -14,14 +14,14 @@ const uploadApi = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   const form = formidable({
-    maxFileSize: 1000 * 1024 * 1024, // 200MB in bytes
+    maxFileSize: 200 * 1024 * 1024 * 1024, // 200GB in bytes
     uploadDir: "./public/uploads", // The folder must exist
     keepExtensions: true, // If true, the uploaded file will have the same extension as the original file
   });
 
   // Listen for the 'progress' event to get accurate progress updates
   form.on("progress", (bytesReceived, bytesExpected) => {
-    const percentage = Math.round((bytesReceived / bytesExpected) * 100);
+    const percentage = (bytesReceived / bytesExpected) * 100;
     console.log("Upload progress:", percentage, "%");
   });
 
@@ -33,24 +33,39 @@ const uploadApi = async (req: NextApiRequest, res: NextApiResponse) => {
 
     const uploadedFiles = files.files as formidable.File[];
 
-    for (const uploadedFile of uploadedFiles) {
-      // Get the temporary file path
+    const filePromises = uploadedFiles.map(async (uploadedFile) => {
       const tempFilePath = uploadedFile.filepath;
-
-      // Generate a new file name (you can use other strategies to ensure unique filenames)
       const newFileName = `${Date.now()}-${uploadedFile.originalFilename}`;
-
-      // Construct the new file path
       const newFilePath = `./public/uploads/${newFileName}`;
-      fs.rename(tempFilePath, newFilePath, (renameErr) => {
-        if (renameErr) {
-          console.error("Error moving the file:", renameErr);
-          return res.status(500).json({ error: "Internal Server Error" });
+
+
+      const readStream = fs.createReadStream(tempFilePath);
+      const writeStream = fs.createWriteStream(newFilePath);
+
+      await new Promise<void>((resolve, reject) => {
+        readStream.pipe(writeStream);
+        readStream.on('end', () => resolve());
+        readStream.on('error', (error) => reject(error));
+      });
+
+      fs.unlink(tempFilePath, (unlinkErr) => {
+        if (unlinkErr) {
+          console.error('Error deleting temporary file:', unlinkErr);
         }
       });
+    });
+
+    try {
+      await Promise.all(filePromises);
+      return res.status(200).json({ message: 'Files uploaded successfully' });
+    } catch (error) {
+      console.error('Error moving the files:', error);
+      return res.status(500).json({ error: 'Internal Server Error' });
     }
-    return res.status(200).json({ message: "File uploaded successfully" });
   });
+
+
+
 };
 
 export default uploadApi;

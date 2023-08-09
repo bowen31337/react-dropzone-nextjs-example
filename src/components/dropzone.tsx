@@ -45,6 +45,7 @@ const FileUploadWithProgress: React.FC = () => {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: true,
+    maxSize: 200 * 1024 * 1024 * 1024, // 200GB in bytes
   });
 
   return (
